@@ -24,10 +24,10 @@ A Go package for simplified interactions with LLM services like OpenAI, Anthropi
 - [x] Implement client with tests
 
 ### Step 3: OpenAI Provider Implementation
-- [  ] Implement OpenAI client
-- [  ] Add getText functionality
-- [  ] Add getObject functionality
-- [  ] Add tests
+- [x] Implement OpenAI client
+- [x] Add getText functionality
+- [x] Add getObject functionality
+- [x] Add tests
 
 ### Step 4: Anthropic Provider Implementation
 - [  ] Implement Anthropic client
