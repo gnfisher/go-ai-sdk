@@ -1,5 +1,7 @@
 # Claude Guidelines for Go-AI-SDK
 
+The user is an experienced developer with significant Go experience. Communications can be direct, specific, and technical.
+
 ## Build & Test Commands
 - Build: `make build` or `go build ./...`
 - Test all: `make test` or `go test ./...`
@@ -12,6 +14,9 @@
 - Check off completed tasks in PLANNING.md as we go
 - Add new steps/tasks to PLANNING.md when necessary
 - Work in small, tight iterations with feedback for each step
+- Keep scope tight - build minimal working code first, then expand
+- Start with simplest implementation that can be tested
+- Accept that early code may need refactoring as features are added
 - Each iteration should result in something committable with passing tests
 - Prioritize concrete progress that can be validated
 

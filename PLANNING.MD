@@ -18,9 +18,10 @@ A Go package for simplified interactions with LLM services like OpenAI, Anthropi
 - [x] Create Makefile
 
 ### Step 2: Define Core Interfaces
-- [  ] Define Message interface
-- [  ] Define Provider interface
-- [  ] Define Config structs
+- [x] Define Message interface
+- [x] Define Provider interface
+- [x] Define Config structs
+- [x] Implement client with tests
 
 ### Step 3: OpenAI Provider Implementation
 - [  ] Implement OpenAI client
