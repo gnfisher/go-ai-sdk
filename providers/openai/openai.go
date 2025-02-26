@@ -184,7 +184,7 @@ func (p *Provider) GetObject(ctx context.Context, config *ai.Config, target inte
 
 	// Extract the type information from the target
 	targetType := fmt.Sprintf("%T", target)
-	
+
 	// Create a system message instructing the model to return JSON
 	systemMsg := ai.Message{
 		Role:    ai.RoleSystem,
@@ -200,7 +200,7 @@ func (p *Provider) GetObject(ctx context.Context, config *ai.Config, target inte
 			break
 		}
 	}
-	
+
 	if !hasSystemMsg {
 		messages = append([]ai.Message{systemMsg}, messages...)
 	}
@@ -219,7 +219,7 @@ func (p *Provider) GetObject(ctx context.Context, config *ai.Config, target inte
 
 	// Clean the response to ensure it's valid JSON
 	jsonStr := strings.TrimSpace(textResp)
-	
+
 	// If response starts with ``` (markdown code block), clean it up
 	if strings.HasPrefix(jsonStr, "```json") {
 		jsonStr = strings.TrimPrefix(jsonStr, "```json")

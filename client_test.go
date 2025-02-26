@@ -22,15 +22,15 @@ func (m *MockProvider) GetObject(ctx context.Context, config *Config, target int
 
 func TestNewClient(t *testing.T) {
 	client := NewClient()
-	
+
 	if client.defaults.Temperature != 0.7 {
 		t.Errorf("Expected default temperature to be 0.7, got %f", client.defaults.Temperature)
 	}
-	
+
 	if client.defaults.MaxTokens != 1000 {
 		t.Errorf("Expected default max tokens to be 1000, got %d", client.defaults.MaxTokens)
 	}
-	
+
 	// Test with options
 	client = NewClient(
 		WithProvider(ProviderOpenAI),
@@ -38,19 +38,19 @@ func TestNewClient(t *testing.T) {
 		WithTemperature(0.5),
 		WithMaxTokens(500),
 	)
-	
+
 	if client.defaults.Provider != ProviderOpenAI {
 		t.Errorf("Expected default provider to be OpenAI, got %s", client.defaults.Provider)
 	}
-	
+
 	if client.defaults.Model != "gpt-4" {
 		t.Errorf("Expected default model to be gpt-4, got %s", client.defaults.Model)
 	}
-	
+
 	if client.defaults.Temperature != 0.5 {
 		t.Errorf("Expected default temperature to be 0.5, got %f", client.defaults.Temperature)
 	}
-	
+
 	if client.defaults.MaxTokens != 500 {
 		t.Errorf("Expected default max tokens to be 500, got %d", client.defaults.MaxTokens)
 	}
@@ -59,9 +59,9 @@ func TestNewClient(t *testing.T) {
 func TestRegisterProvider(t *testing.T) {
 	client := NewClient()
 	mockProvider := &MockProvider{}
-	
+
 	client.RegisterProvider(ProviderOpenAI, mockProvider)
-	
+
 	if _, ok := client.providers[ProviderOpenAI]; !ok {
 		t.Errorf("Expected provider to be registered")
 	}
@@ -76,32 +76,32 @@ func TestGetText(t *testing.T) {
 			return "Hello, world!", nil
 		},
 	}
-	
+
 	client := NewClient()
 	client.RegisterProvider(ProviderOpenAI, mockProvider)
-	
+
 	// Test with no model
 	_, err := client.GetText(context.Background(), WithProvider(ProviderOpenAI))
 	if !errors.Is(err, ErrModelNotSpecified) {
 		t.Errorf("Expected ErrModelNotSpecified, got %v", err)
 	}
-	
+
 	// Test with unsupported provider
 	_, err = client.GetText(context.Background(), WithProvider("unsupported"), WithModel("test-model"))
 	if !errors.Is(err, ErrProviderNotSupported) {
 		t.Errorf("Expected ErrProviderNotSupported, got %v", err)
 	}
-	
+
 	// Test with valid config
-	result, err := client.GetText(context.Background(), 
+	result, err := client.GetText(context.Background(),
 		WithProvider(ProviderOpenAI),
 		WithModel("test-model"),
 	)
-	
+
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
-	
+
 	if result != "Hello, world!" {
 		t.Errorf("Expected 'Hello, world!', got %s", result)
 	}
@@ -117,45 +117,45 @@ func TestGetObject(t *testing.T) {
 			if config.Model != "test-model" {
 				return errors.New("unexpected model")
 			}
-			
+
 			// Cast target to the expected type
 			resp, ok := target.(*TestResponse)
 			if !ok {
 				return errors.New("unexpected target type")
 			}
-			
+
 			// Set the value
 			resp.Message = "Hello, world!"
 			return nil
 		},
 	}
-	
+
 	client := NewClient()
 	client.RegisterProvider(ProviderOpenAI, mockProvider)
-	
+
 	// Test with no model
 	var resp TestResponse
 	err := client.GetObject(context.Background(), &resp, WithProvider(ProviderOpenAI))
 	if !errors.Is(err, ErrModelNotSpecified) {
 		t.Errorf("Expected ErrModelNotSpecified, got %v", err)
 	}
-	
+
 	// Test with unsupported provider
 	err = client.GetObject(context.Background(), &resp, WithProvider("unsupported"), WithModel("test-model"))
 	if !errors.Is(err, ErrProviderNotSupported) {
 		t.Errorf("Expected ErrProviderNotSupported, got %v", err)
 	}
-	
+
 	// Test with valid config
 	err = client.GetObject(context.Background(), &resp,
 		WithProvider(ProviderOpenAI),
 		WithModel("test-model"),
 	)
-	
+
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
-	
+
 	if resp.Message != "Hello, world!" {
 		t.Errorf("Expected 'Hello, world!', got %s", resp.Message)
 	}

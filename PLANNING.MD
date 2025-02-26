@@ -3,11 +3,11 @@
 A Go package for simplified interactions with LLM services like OpenAI, Anthropic, etc.
 
 ## Core Features
-- [  ] `getText` API for text completion responses
-- [  ] `getObject` API for structured responses
-- [  ] Support for multiple providers/models
+- [x] `getText` API for text completion responses
+- [x] `getObject` API for structured responses
+- [x] Support for multiple providers/models
 - [  ] Tool calling support
-- [  ] Parameter configuration (temperature, log probs, etc.)
+- [x] Parameter configuration (temperature, log probs, etc.)
 
 ## Implementation Steps
 
@@ -30,10 +30,10 @@ A Go package for simplified interactions with LLM services like OpenAI, Anthropi
 - [x] Add tests
 
 ### Step 4: Anthropic Provider Implementation
-- [  ] Implement Anthropic client
-- [  ] Add getText functionality
-- [  ] Add getObject functionality
-- [  ] Add tests
+- [x] Implement Anthropic client
+- [x] Add getText functionality
+- [x] Add getObject functionality
+- [x] Add tests
 
 ### Step 5: Add Tool Calling Support
 - [  ] Define tool interfaces

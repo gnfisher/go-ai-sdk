@@ -14,7 +14,9 @@ import (
 func mockServer(statusCode int, responseBody string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(statusCode)
-		w.Write([]byte(responseBody))
+		if _, err := w.Write([]byte(responseBody)); err != nil {
+			panic(err)
+		}
 	}))
 }
 
@@ -69,10 +71,10 @@ func TestGetText(t *testing.T) {
 		},
 	}
 	mockResponseJSON, _ := json.Marshal(mockResponse)
-	
+
 	server := mockServer(http.StatusOK, string(mockResponseJSON))
 	defer server.Close()
-	
+
 	provider = New(
 		WithAPIKey("test-key"),
 		WithAPIURL(server.URL),
@@ -105,10 +107,10 @@ func TestGetText(t *testing.T) {
 		},
 	}
 	errorResponseJSON, _ := json.Marshal(errorResponse)
-	
+
 	server = mockServer(http.StatusBadRequest, string(errorResponseJSON))
 	defer server.Close()
-	
+
 	provider = New(
 		WithAPIKey("test-key"),
 		WithAPIURL(server.URL),
@@ -149,7 +151,7 @@ func TestGetObject(t *testing.T) {
 		},
 	}
 	mockResponseJSON, _ := json.Marshal(mockResponse)
-	
+
 	server := mockServer(http.StatusOK, string(mockResponseJSON))
 	defer server.Close()
 
@@ -186,7 +188,7 @@ func TestGetObject(t *testing.T) {
 		},
 	}
 	mockResponseJSON, _ = json.Marshal(mockResponse)
-	
+
 	server = mockServer(http.StatusOK, string(mockResponseJSON))
 	defer server.Close()
 
