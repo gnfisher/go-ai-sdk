@@ -305,6 +305,24 @@ func TestConvertMessages(t *testing.T) {
 	}
 }
 
+func TestGetToolCalls(t *testing.T) {
+	provider := New(WithAPIKey("test-key"))
+	_, err := provider.GetToolCalls(context.Background(), &ai.Config{
+		Model: "claude-3-haiku-20240307",
+		Tools: []ai.FunctionDefinition{
+			{
+				Name:        "get_weather",
+				Description: "Gets the weather for a location",
+				Parameters:  json.RawMessage(`{}`),
+			},
+		},
+	})
+
+	if err == nil || err.Error() != "tool calling not yet supported for Anthropic provider" {
+		t.Errorf("Expected 'tool calling not yet supported' error, got %v", err)
+	}
+}
+
 func TestProviderOptions(t *testing.T) {
 	// Test default values
 	provider := New()

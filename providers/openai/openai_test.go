@@ -215,3 +215,180 @@ func TestGetObject(t *testing.T) {
 		t.Errorf("Expected 'Hello, world!', got %s", resp.Message)
 	}
 }
+
+func TestGetToolCalls(t *testing.T) {
+	// Test missing API key
+	provider := New()
+	_, err := provider.GetToolCalls(context.Background(), &ai.Config{
+		Model: "test-model",
+		Tools: []ai.FunctionDefinition{
+			{
+				Name:        "get_weather",
+				Description: "Gets weather information",
+				Parameters:  json.RawMessage(`{"type":"object"}`),
+			},
+		},
+	})
+	if err != ErrEmptyAPIKey {
+		t.Errorf("Expected ErrEmptyAPIKey, got %v", err)
+	}
+
+	// Test no tools specified
+	provider = New(WithAPIKey("test-key"))
+	_, err = provider.GetToolCalls(context.Background(), &ai.Config{
+		Model: "test-model",
+	})
+	if err == nil || err.Error() != "no tools specified" {
+		t.Errorf("Expected 'no tools specified' error, got %v", err)
+	}
+
+	// Test successful response with tool calls
+	mockResponse := Response{
+		Choices: []Choice{
+			{
+				Message: Message{
+					Role:    "assistant",
+					Content: "",
+					ToolCalls: []ToolCall{
+						{
+							ID:   "call_abc123",
+							Type: "function",
+							Function: ToolFunction{
+								Name:      "get_weather",
+								Arguments: json.RawMessage(`{"location":"San Francisco","unit":"celsius"}`),
+							},
+						},
+					},
+				},
+				FinishReason: "tool_calls",
+			},
+		},
+	}
+	mockResponseJSON, _ := json.Marshal(mockResponse)
+
+	server := mockServer(http.StatusOK, string(mockResponseJSON))
+	defer server.Close()
+
+	provider = New(
+		WithAPIKey("test-key"),
+		WithAPIURL(server.URL),
+	)
+
+	result, err := provider.GetToolCalls(context.Background(), &ai.Config{
+		Model: "test-model",
+		Messages: []ai.Message{
+			{
+				Role:    ai.RoleUser,
+				Content: "What's the weather in San Francisco?",
+			},
+		},
+		Tools: []ai.FunctionDefinition{
+			{
+				Name:        "get_weather",
+				Description: "Gets weather information",
+				Parameters:  json.RawMessage(`{"type":"object"}`),
+			},
+		},
+	})
+
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Errorf("Expected 1 tool call, got %d", len(result))
+		return
+	}
+
+	if result[0].ID != "call_abc123" {
+		t.Errorf("Expected tool call ID 'call_abc123', got %s", result[0].ID)
+	}
+
+	if result[0].Type != "function" {
+		t.Errorf("Expected tool call type 'function', got %s", result[0].Type)
+	}
+
+	if result[0].Tool.Name != "get_weather" {
+		t.Errorf("Expected tool name 'get_weather', got %s", result[0].Tool.Name)
+	}
+
+	// Test response with no tool calls
+	mockResponse = Response{
+		Choices: []Choice{
+			{
+				Message: Message{
+					Role:      "assistant",
+					Content:   "I don't need to use a tool for this.",
+					ToolCalls: []ToolCall{},
+				},
+				FinishReason: "stop",
+			},
+		},
+	}
+	mockResponseJSON, _ = json.Marshal(mockResponse)
+
+	server = mockServer(http.StatusOK, string(mockResponseJSON))
+	defer server.Close()
+
+	provider = New(
+		WithAPIKey("test-key"),
+		WithAPIURL(server.URL),
+	)
+
+	result, err = provider.GetToolCalls(context.Background(), &ai.Config{
+		Model: "test-model",
+		Messages: []ai.Message{
+			{
+				Role:    ai.RoleUser,
+				Content: "Hello, how are you?",
+			},
+		},
+		Tools: []ai.FunctionDefinition{
+			{
+				Name:        "get_weather",
+				Description: "Gets weather information",
+				Parameters:  json.RawMessage(`{"type":"object"}`),
+			},
+		},
+	})
+
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	if len(result) != 0 {
+		t.Errorf("Expected 0 tool calls, got %d", len(result))
+	}
+
+	// Test error response
+	errorResponse := Response{
+		Error: &Error{
+			Message: "Invalid model",
+			Type:    "invalid_request_error",
+		},
+	}
+	errorResponseJSON, _ := json.Marshal(errorResponse)
+
+	server = mockServer(http.StatusBadRequest, string(errorResponseJSON))
+	defer server.Close()
+
+	provider = New(
+		WithAPIKey("test-key"),
+		WithAPIURL(server.URL),
+	)
+
+	_, err = provider.GetToolCalls(context.Background(), &ai.Config{
+		Model: "invalid-model",
+		Tools: []ai.FunctionDefinition{
+			{
+				Name:        "get_weather",
+				Description: "Gets weather information",
+				Parameters:  json.RawMessage(`{"type":"object"}`),
+			},
+		},
+	})
+
+	if err == nil {
+		t.Errorf("Expected error, got nil")
+	}
+}

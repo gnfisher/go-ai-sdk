@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 )
 
 // Provider represents the LLM service provider
@@ -19,12 +20,35 @@ const (
 	RoleSystem    MessageRole = "system"
 	RoleUser      MessageRole = "user"
 	RoleAssistant MessageRole = "assistant"
+	RoleTool      MessageRole = "tool" // Used for tool responses
 )
 
 // Message represents a single message in a conversation
 type Message struct {
-	Role    MessageRole `json:"role"`
-	Content string      `json:"content"`
+	Role       MessageRole `json:"role"`
+	Content    string      `json:"content"`
+	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`
+	ToolCallID string      `json:"tool_call_id,omitempty"` // For tool response messages
+}
+
+// ToolCall represents a call to a tool
+type ToolCall struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+	Tool Tool   `json:"tool"`
+}
+
+// Tool represents a tool that can be called by the LLM
+type Tool struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"` // Raw JSON for flexibility
+}
+
+// FunctionDefinition represents a function that can be called by the LLM
+type FunctionDefinition struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"` // Expected to be a JSON Schema
 }
 
 // SystemMessage creates a new system message
@@ -51,10 +75,20 @@ func AssistantMessage(content string) Message {
 	}
 }
 
+// ToolResultMessage creates a new tool result message
+func ToolResultMessage(toolCallID string, content string) Message {
+	return Message{
+		Role:       RoleTool,
+		Content:    content,
+		ToolCallID: toolCallID,
+	}
+}
+
 // LLMProvider defines the interface that all LLM providers must implement
 type LLMProvider interface {
 	GetText(ctx context.Context, config *Config) (string, error)
 	GetObject(ctx context.Context, config *Config, target interface{}) error
+	GetToolCalls(ctx context.Context, config *Config) ([]ToolCall, error)
 }
 
 // Config holds the configuration for a request to an LLM provider
@@ -64,6 +98,7 @@ type Config struct {
 	Messages    []Message
 	MaxTokens   int
 	Temperature float64
+	Tools       []FunctionDefinition
 }
 
 // Option is a function that modifies a Config
@@ -101,5 +136,12 @@ func WithMaxTokens(maxTokens int) Option {
 func WithTemperature(temperature float64) Option {
 	return func(c *Config) {
 		c.Temperature = temperature
+	}
+}
+
+// WithTools sets the tools for the request
+func WithTools(tools ...FunctionDefinition) Option {
+	return func(c *Config) {
+		c.Tools = tools
 	}
 }

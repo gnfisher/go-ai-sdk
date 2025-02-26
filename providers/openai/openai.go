@@ -69,8 +69,10 @@ func New(options ...Option) *Provider {
 
 // Message represents an OpenAI chat message
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string     `json:"role"`
+	Content    string     `json:"content"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
 }
 
 // Request represents a request to the OpenAI API
@@ -79,6 +81,21 @@ type Request struct {
 	Messages    []Message `json:"messages"`
 	Temperature float64   `json:"temperature,omitempty"`
 	MaxTokens   int       `json:"max_tokens,omitempty"`
+	Tools       []Tool    `json:"tools,omitempty"`
+	ToolChoice  string    `json:"tool_choice,omitempty"`
+}
+
+// Tool represents a tool that can be called by the model
+type Tool struct {
+	Type     string   `json:"type"`
+	Function Function `json:"function"`
+}
+
+// Function represents a function that can be called by the model
+type Function struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"`
 }
 
 // Response represents a response from the OpenAI API
@@ -97,6 +114,19 @@ type Choice struct {
 	FinishReason string  `json:"finish_reason"`
 }
 
+// ToolCall represents a tool call in the OpenAI API
+type ToolCall struct {
+	ID       string       `json:"id"`
+	Type     string       `json:"type"`
+	Function ToolFunction `json:"function"`
+}
+
+// ToolFunction represents a function call in a tool call
+type ToolFunction struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
 // Error represents an error in the OpenAI API response
 type Error struct {
 	Message string `json:"message"`
@@ -109,11 +139,76 @@ type Error struct {
 func convertMessages(messages []ai.Message) []Message {
 	result := make([]Message, len(messages))
 	for i, msg := range messages {
-		result[i] = Message{
+		openAIMsg := Message{
 			Role:    string(msg.Role),
 			Content: msg.Content,
 		}
+
+		// Handle tool response messages
+		if msg.Role == ai.RoleTool {
+			openAIMsg.Role = "tool"
+			openAIMsg.ToolCallID = msg.ToolCallID
+		}
+
+		// Copy tool calls if present
+		if len(msg.ToolCalls) > 0 {
+			openAIMsg.ToolCalls = make([]ToolCall, len(msg.ToolCalls))
+			for j, tc := range msg.ToolCalls {
+				openAIMsg.ToolCalls[j] = ToolCall{
+					ID:   tc.ID,
+					Type: tc.Type,
+					Function: ToolFunction{
+						Name:      tc.Tool.Name,
+						Arguments: tc.Tool.Arguments,
+					},
+				}
+			}
+		}
+
+		result[i] = openAIMsg
 	}
+	return result
+}
+
+// convertToolCallsToSDK converts OpenAI ToolCall to SDK ToolCall
+func convertToolCallsToSDK(toolCalls []ToolCall) []ai.ToolCall {
+	if toolCalls == nil {
+		return nil
+	}
+
+	result := make([]ai.ToolCall, len(toolCalls))
+	for i, tc := range toolCalls {
+		result[i] = ai.ToolCall{
+			ID:   tc.ID,
+			Type: tc.Type,
+			Tool: ai.Tool{
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			},
+		}
+	}
+
+	return result
+}
+
+// convertFunctionDefinitionsToTools converts FunctionDefinitions to OpenAI Tools
+func convertFunctionDefinitionsToTools(funcs []ai.FunctionDefinition) []Tool {
+	if funcs == nil {
+		return nil
+	}
+
+	result := make([]Tool, len(funcs))
+	for i, f := range funcs {
+		result[i] = Tool{
+			Type: "function",
+			Function: Function{
+				Name:        f.Name,
+				Description: f.Description,
+				Parameters:  f.Parameters,
+			},
+		}
+	}
+
 	return result
 }
 
@@ -241,4 +336,78 @@ func (p *Provider) GetObject(ctx context.Context, config *ai.Config, target inte
 	}
 
 	return nil
+}
+
+// GetToolCalls gets tool calls from the OpenAI API
+func (p *Provider) GetToolCalls(ctx context.Context, config *ai.Config) ([]ai.ToolCall, error) {
+	if p.apiKey == "" {
+		return nil, ErrEmptyAPIKey
+	}
+
+	if len(config.Tools) == 0 {
+		return nil, fmt.Errorf("no tools specified")
+	}
+
+	openaiMessages := convertMessages(config.Messages)
+	tools := convertFunctionDefinitionsToTools(config.Tools)
+
+	// Create the request body
+	reqBody := Request{
+		Model:       config.Model,
+		Messages:    openaiMessages,
+		Temperature: config.Temperature,
+		MaxTokens:   config.MaxTokens,
+		Tools:       tools,
+		ToolChoice:  "auto", // Let the model decide when to call tools
+	}
+
+	reqJSON, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.apiURL, bytes.NewBuffer(reqJSON))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp Response
+		if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error != nil {
+			return nil, fmt.Errorf("OpenAI API error: %s", errResp.Error.Message)
+		}
+		return nil, fmt.Errorf("OpenAI API returned status code %d: %s", resp.StatusCode, body)
+	}
+
+	var openAIResp Response
+	if err := json.Unmarshal(body, &openAIResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if len(openAIResp.Choices) == 0 {
+		return nil, ErrInvalidResponse
+	}
+
+	message := openAIResp.Choices[0].Message
+	if len(message.ToolCalls) == 0 {
+		// No tool calls were made, return empty slice with no error
+		return []ai.ToolCall{}, nil
+	}
+
+	// Convert OpenAI tool calls to our SDK format
+	return convertToolCallsToSDK(message.ToolCalls), nil
 }

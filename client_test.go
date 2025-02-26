@@ -2,14 +2,16 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 )
 
 // MockProvider implements LLMProvider for testing
 type MockProvider struct {
-	GetTextFunc   func(ctx context.Context, config *Config) (string, error)
-	GetObjectFunc func(ctx context.Context, config *Config, target interface{}) error
+	GetTextFunc      func(ctx context.Context, config *Config) (string, error)
+	GetObjectFunc    func(ctx context.Context, config *Config, target interface{}) error
+	GetToolCallsFunc func(ctx context.Context, config *Config) ([]ToolCall, error)
 }
 
 func (m *MockProvider) GetText(ctx context.Context, config *Config) (string, error) {
@@ -18,6 +20,10 @@ func (m *MockProvider) GetText(ctx context.Context, config *Config) (string, err
 
 func (m *MockProvider) GetObject(ctx context.Context, config *Config, target interface{}) error {
 	return m.GetObjectFunc(ctx, config, target)
+}
+
+func (m *MockProvider) GetToolCalls(ctx context.Context, config *Config) ([]ToolCall, error) {
+	return m.GetToolCallsFunc(ctx, config)
 }
 
 func TestNewClient(t *testing.T) {
@@ -158,5 +164,95 @@ func TestGetObject(t *testing.T) {
 
 	if resp.Message != "Hello, world!" {
 		t.Errorf("Expected 'Hello, world!', got %s", resp.Message)
+	}
+}
+
+func TestGetToolCalls(t *testing.T) {
+	mockTool := FunctionDefinition{
+		Name:        "get_weather",
+		Description: "Gets the weather for a location",
+		Parameters:  json.RawMessage(`{"type":"object","properties":{"location":{"type":"string"},"unit":{"type":"string","enum":["celsius","fahrenheit"]}},"required":["location"]}`),
+	}
+
+	mockToolCall := ToolCall{
+		ID:   "call_123",
+		Type: "function",
+		Tool: Tool{
+			Name:      "get_weather",
+			Arguments: json.RawMessage(`{"location":"San Francisco","unit":"celsius"}`),
+		},
+	}
+
+	mockProvider := &MockProvider{
+		GetToolCallsFunc: func(ctx context.Context, config *Config) ([]ToolCall, error) {
+			if config.Model != "test-model" {
+				return nil, errors.New("unexpected model")
+			}
+
+			// Check that tools are passed correctly
+			if len(config.Tools) == 0 {
+				return nil, errors.New("no tools specified")
+			}
+
+			if config.Tools[0].Name != "get_weather" {
+				return nil, errors.New("unexpected tool")
+			}
+
+			return []ToolCall{mockToolCall}, nil
+		},
+	}
+
+	client := NewClient()
+	client.RegisterProvider(ProviderOpenAI, mockProvider)
+
+	// Test with no model
+	_, err := client.GetToolCalls(context.Background(),
+		WithProvider(ProviderOpenAI),
+		WithTools(mockTool),
+	)
+	if !errors.Is(err, ErrModelNotSpecified) {
+		t.Errorf("Expected ErrModelNotSpecified, got %v", err)
+	}
+
+	// Test with no tools
+	_, err = client.GetToolCalls(context.Background(),
+		WithProvider(ProviderOpenAI),
+		WithModel("test-model"),
+	)
+	if err == nil || err.Error() != "no tools specified" {
+		t.Errorf("Expected 'no tools specified' error, got %v", err)
+	}
+
+	// Test with unsupported provider
+	_, err = client.GetToolCalls(context.Background(),
+		WithProvider("unsupported"),
+		WithModel("test-model"),
+		WithTools(mockTool),
+	)
+	if !errors.Is(err, ErrProviderNotSupported) {
+		t.Errorf("Expected ErrProviderNotSupported, got %v", err)
+	}
+
+	// Test with valid config
+	result, err := client.GetToolCalls(context.Background(),
+		WithProvider(ProviderOpenAI),
+		WithModel("test-model"),
+		WithTools(mockTool),
+	)
+
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Errorf("Expected 1 tool call, got %d", len(result))
+	}
+
+	if result[0].ID != "call_123" {
+		t.Errorf("Expected tool call ID 'call_123', got %s", result[0].ID)
+	}
+
+	if result[0].Tool.Name != "get_weather" {
+		t.Errorf("Expected tool name 'get_weather', got %s", result[0].Tool.Name)
 	}
 }

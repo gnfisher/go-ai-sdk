@@ -12,6 +12,9 @@ var (
 
 	// ErrModelNotSpecified is returned when no model is specified
 	ErrModelNotSpecified = errors.New("model not specified")
+
+	// ErrToolsNotSupported is returned when the provider does not support tools
+	ErrToolsNotSupported = errors.New("tools not supported by provider")
 )
 
 // Client is the main entry point for the go-ai-sdk
@@ -58,6 +61,12 @@ func (c *Client) mergeConfig(options ...Option) *Config {
 		copy(config.Messages, c.defaults.Messages)
 	}
 
+	// Copy tools (if any)
+	if len(c.defaults.Tools) > 0 {
+		config.Tools = make([]FunctionDefinition, len(c.defaults.Tools))
+		copy(config.Tools, c.defaults.Tools)
+	}
+
 	// Apply the options
 	for _, opt := range options {
 		opt(config)
@@ -96,4 +105,24 @@ func (c *Client) GetObject(ctx context.Context, target interface{}, options ...O
 	}
 
 	return provider.GetObject(ctx, config, target)
+}
+
+// GetToolCalls gets tool calls from the specified provider
+func (c *Client) GetToolCalls(ctx context.Context, options ...Option) ([]ToolCall, error) {
+	config := c.mergeConfig(options...)
+
+	if config.Model == "" {
+		return nil, ErrModelNotSpecified
+	}
+
+	if len(config.Tools) == 0 {
+		return nil, fmt.Errorf("no tools specified")
+	}
+
+	provider, ok := c.providers[config.Provider]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrProviderNotSupported, config.Provider)
+	}
+
+	return provider.GetToolCalls(ctx, config)
 }

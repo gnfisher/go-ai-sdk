@@ -292,3 +292,8 @@ func (p *Provider) GetObject(ctx context.Context, config *ai.Config, target inte
 
 	return nil
 }
+
+// GetToolCalls is not yet implemented for Anthropic
+func (p *Provider) GetToolCalls(ctx context.Context, config *ai.Config) ([]ai.ToolCall, error) {
+	return nil, fmt.Errorf("tool calling not yet supported for Anthropic provider")
+}
